@@ -234,6 +234,7 @@
           <div class="lbl">putts</div>
         </div>
         <div style="flex:1"></div>
+        <button class="chip" id="chip-tee">Tee</button>
         <button class="chip" id="chip-fir">FW</button>
         <button class="chip" id="chip-gir">GIR</button>
       </div>
@@ -286,7 +287,7 @@
 <script>
 /* ================= CONSTANTS ================= */
 const defaultPars=[4,4,3,5,4,4,3,4,5,4,3,4,5,4,4,3,4,5];
-const DEFAULT_BAG=['Dr','3W','5W','4h','5i','6i','7i','8i','9i','PW','GW','SW','LW','Putter'];
+const DEFAULT_BAG=['Dr','3W','5W','4h','3i','4i','5i','6i','7i','8i','9i','PW','GW','SW','LW','Putter'];
 const MISS_TAGS=['chunked','skulled','thin','fat','push','pull','slice','hook'];
 const PENALTIES=[['ob','OB'],['water','Water'],['unplayable','Unplayable']];
 const RELIEFS=[['gur','GUR / maintenance'],['cartpath','Cart path'],['casualwater','Casual water'],['embedded','Embedded ball']];
@@ -306,13 +307,13 @@ function freshRound(mode,players){
     course:'My Course', date:new Date().toISOString(),
     pars:[...defaultPars],
     scores:Array(18).fill(null), putts:Array(18).fill(null),
-    fir:Array(18).fill(null), gir:Array(18).fill(null),
+    fir:Array(18).fill(null), gir:Array(18).fill(null), tee:Array(18).fill(null),
     shots:Array.from({length:18},()=>[]),
     scramble: mode==='scramble' ? {players:players||['Me','P2']} : null
   };
 }
 function migrate(r){
-  if(r.version>=2) return r;
+  if(r.version>=2){ if(!r.tee)r.tee=Array(18).fill(null); return r; }
   const m=freshRound();
   m.course=r.course||'My Course'; m.date=r.date||new Date().toISOString();
   m.pars=r.pars||[...defaultPars]; m.scores=r.scores||Array(18).fill(null);
@@ -622,18 +623,21 @@ function syncHoleStrip(){
   document.getElementById('cur-putts').textContent=round.putts[curHole-1]??'–';
   document.getElementById('cur-shots').textContent=round.shots[curHole-1].length;
   document.getElementById('mode-badge').textContent=round.mode==='scramble'?'· SCRAMBLE':'';
-  const fir=document.getElementById('chip-fir'),gir=document.getElementById('chip-gir');
+  const fir=document.getElementById('chip-fir'),gir=document.getElementById('chip-gir'),tee=document.getElementById('chip-tee');
   const isPar3=round.pars[curHole-1]===3;
   fir.style.display=isPar3?'none':'';
   fir.className='chip'+(round.fir[curHole-1]===true?' on':round.fir[curHole-1]===false?' off':'');
   fir.textContent='FW '+(round.fir[curHole-1]===true?'✓':round.fir[curHole-1]===false?'✗':'');
   gir.className='chip'+(round.gir[curHole-1]===true?' on':round.gir[curHole-1]===false?' off':'');
   gir.textContent='GIR '+(round.gir[curHole-1]===true?'✓':round.gir[curHole-1]===false?'✗':'');
+  tee.className='chip'+(round.tee[curHole-1]===true?' on':round.tee[curHole-1]===false?' off':'');
+  tee.textContent='Tee '+(round.tee[curHole-1]===true?'✓':round.tee[curHole-1]===false?'✗':'');
   drawShots();
 }
 function cycle(v){return v===null?true:v===true?false:null;}
 document.getElementById('chip-fir').onclick=()=>{round.fir[curHole-1]=cycle(round.fir[curHole-1]);syncHoleStrip();scheduleAutosave();};
 document.getElementById('chip-gir').onclick=()=>{round.gir[curHole-1]=cycle(round.gir[curHole-1]);syncHoleStrip();scheduleAutosave();};
+document.getElementById('chip-tee').onclick=()=>{round.tee[curHole-1]=cycle(round.tee[curHole-1]);syncHoleStrip();scheduleAutosave();};
 document.getElementById('prev-hole').onclick=()=>{curHole=curHole===1?18:curHole-1;syncHoleStrip();};
 document.getElementById('next-hole').onclick=()=>{curHole=curHole===18?1:curHole+1;syncHoleStrip();};
 document.getElementById('stroke-plus').onclick=()=>{round.scores[curHole-1]=(round.scores[curHole-1]||0)+1;syncHoleStrip();renderCard();scheduleAutosave();};
