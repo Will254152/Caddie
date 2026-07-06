@@ -185,7 +185,7 @@
 </head>
 <body>
 <header>
-  <h1>Pocket <span>Caddie</span> <span style="font-size:9px;color:var(--clay);letter-spacing:0;">v2.6</span></h1>
+  <h1>Pocket <span>Caddie</span> <span style="font-size:9px;color:var(--clay);letter-spacing:0;">v1.0</span></h1>
   <div id="gps-dot">● GPS off</div>
 </header>
 <div class="banner" id="gps-banner">GPS unavailable in this preview. Once hosted and opened in Safari, live yardages work. Tap the map to test pins meanwhile.</div>
@@ -271,13 +271,67 @@
       <button id="export-all">⬇ Export all data (JSON)</button>
       <div id="history"></div>
     </div>
+  <!-- HELP -->
+  <section class="view" id="view-help">
+    <div style="flex:1;overflow-y:auto;background:var(--paper);color:var(--ink);-webkit-overflow-scrolling:touch;padding:16px;font-size:14px;line-height:1.55;" id="help-body">
+      <h2 style="font-size:19px;margin-bottom:4px;">How to use Pocket Caddie</h2>
+      <p style="color:#6b7570;font-size:12px;margin-bottom:14px;">Your personal golf GPS, scorecard, and shot tracker. All data stays on your phone.</p>
+
+      <details open style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🚀 Quick start</summary>
+        <p>1. Allow location when asked — your blue dot appears on the satellite map.<br>
+        2. <b>Tap the map</b> anywhere (the green, a bunker) to drop a flag. The big number is live yards from you to it.<br>
+        3. Tap <b>Mark shot</b> right before you swing to log where you hit from. Tag the club if you want (skippable).<br>
+        4. Count strokes and putts with <b>+/−</b>, swipe holes with <b>‹ ›</b>.<br>
+        5. After the round: Scorecard tab → <b>Save round</b>.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">📏 GPS & yardages</summary>
+        <p>The yardage plate shows the distance from your position to your tapped flag, updating as you walk. Tap <b>📍</b> to re-center on yourself. Phone GPS is accurate to roughly 3–5 yards — great for club selection, too coarse for short putts. The flag is just a measuring target; move it as often as you like.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">⛳ Marking shots</summary>
+        <p><b>Mark shot</b> records your GPS position instantly, then opens a sheet to tag the club, miss type (chunked, skulled…), and a note — all optional; <b>Skip</b> keeps the shot untagged. The first mark on each hole is labeled <b>Tee</b>. Lines between dots show the distance of each shot. Tap any dot to edit, re-tag, or delete it. <b>↺</b> undoes the last mark (with a confirmation — GPS points can't be recreated). <b>⋯ → Clear hole</b> wipes a hole's marks.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🟥 Drops & free relief</summary>
+        <p>Ball moved? Use <b>Ball moved</b>: a <b>penalty drop</b> (OB, water, unplayable) marks the spot in red and adds a stroke automatically; <b>free relief</b> (GUR/maintenance, cart path, casual water, embedded ball) marks it in blue with no stroke.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🧮 Scoring</summary>
+        <p><b>Strokes</b> is your total for the hole. The <b>putts</b> counter adds to the stroke total automatically, so score = swings + putts. The <b>Tee / FW / GIR</b> chips cycle ✓ → ✗ → blank (FW hides on par 3s). Pars are editable on the Scorecard tab.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🥅 Putting notes</summary>
+        <p>Tap the <b>putts number</b> (dotted underline) to open putting notes: first-putt length, a row per putt for miss direction and comments, plus read and green conditions. You can also GPS-mark putts like normal shots (tag club = Putter) — useful for long lag putts, less so inside 10 feet where GPS error is bigger than the putt.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🤝 Scramble</summary>
+        <p>Scorecard tab → <b>New round</b> → Scramble, enter player names. Marking a shot then also asks whose ball it was (skippable). One team score per hole.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🗂 Saving, history & maps</summary>
+        <p><b>Save round</b> stores the round on this phone. The Rounds tab lists them; <b>Map</b> reloads a past round's shot trail onto the satellite view; <b>⬇</b> downloads a formatted scorecard. Your in-progress round auto-saves constantly — if the browser reloads mid-round you'll be offered a resume.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">💾 Your data & backups</summary>
+        <p>Everything lives in this browser's storage on this phone — nothing is uploaded anywhere. <b>Export all data (JSON)</b> on the Rounds tab downloads every round with full detail (GPS points, clubs, tags, notes); it's your backup and your analysis file. Downloaded scorecards also contain the raw data embedded inside. ⚠️ Clearing Safari website data deletes saved rounds — export first.</p>
+      </details>
+
+      <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🔧 Tips</summary>
+        <p><b>⋯ menu</b>: Sun mode (bright-light display), Edit my bag (customize club list), Clear target pin. Add the site to your Home Screen (Share → Add to Home Screen) to use it like an app. GPS drains battery — start rounds fully charged. If an update doesn't appear, the version number in the header tells you what you're running.</p>
+      </details>
+
+      <button id="replay-welcome" style="width:100%;margin-top:6px;padding:12px;border-radius:12px;border:1px dashed var(--pine);background:#fff;color:var(--pine);font-weight:800;font-size:13px;">Show the welcome tour again</button>
+    </div>
   </section>
+
 </main>
 
 <nav>
   <button data-view="play" class="active"><span class="ico">⛳️</span>Play</button>
   <button data-view="card"><span class="ico">✏️</span>Scorecard</button>
   <button data-view="history"><span class="ico">🗂</span>Rounds</button>
+  <button data-view="help"><span class="ico">❓</span>Help</button>
 </nav>
 
 <div id="sheet-veil"></div>
@@ -885,11 +939,33 @@ function switchView(name){
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 
+/* first-visit welcome */
+function showWelcome(){
+  openSheet(
+    '<h3>👋 Welcome to Pocket Caddie</h3>'+
+    '<div class="sheet-sec" style="font-size:14px;line-height:1.6;">'+
+    'Your personal golf GPS and scorecard. The 30-second version:<br><br>'+
+    '<b>1.</b> Allow location — your blue dot appears on the map.<br>'+
+    '<b>2.</b> Tap the map to drop a flag; the big number is live yards to it.<br>'+
+    '<b>3.</b> Tap <b>Mark shot</b> before you swing to log your position (club & notes optional).<br>'+
+    '<b>4.</b> Count strokes & putts with <b>+/−</b>, flip holes with <b>‹ ›</b>.<br>'+
+    '<b>5.</b> Save the round on the Scorecard tab when you\'re done.<br><br>'+
+    'Everything is saved on your phone only. Full directions live in the <b>Help</b> tab any time.'+
+    '</div>'+
+    '<div class="sheet-btns"><button class="sb-skip" id="wl-help">Open full guide</button><button class="sb-save" id="wl-go">Let\'s play</button></div>'
+  );
+  document.getElementById('wl-go').onclick=()=>{closeSheet();stSet('caddie-seen','1');};
+  document.getElementById('wl-help').onclick=()=>{closeSheet();stSet('caddie-seen','1');switchView('help');};
+}
+document.getElementById('replay-welcome').onclick=showWelcome;
+
 (async function init(){
   const bagRaw=await stGet('caddie-bag');
   if(bagRaw){try{const b=JSON.parse(bagRaw);if(Array.isArray(b)&&b.length)bag=b;}catch(e){}}
   renderCard();syncHoleStrip();renderHistory();
-  tryResume();
+  await tryResume();
+  const seen=await stGet('caddie-seen');
+  if(!seen)showWelcome();
 })();
 </script>
 </body>
