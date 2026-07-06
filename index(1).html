@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Pocket Caddie</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --pine:#12352A;
+    --pine-deep:#0B241C;
+    --turf:#1E6B4E;
+    --paper:#FBFAF6;
+    --ink:#1B231F;
+    --flag:#F2C230;
+    --clay:#B0B8B2;
+    --error:#C0392B;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    background:var(--pine-deep);color:var(--paper);
+    display:flex;flex-direction:column;
+    padding-top:env(safe-area-inset-top);
+  }
+  .num{font-family:'Avenir Next Condensed','Arial Narrow',-apple-system,sans-serif;font-weight:700;letter-spacing:-0.02em;}
+
+  /* Header */
+  header{
+    background:var(--pine);padding:10px 16px 8px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:2px solid var(--flag);flex-shrink:0;
+  }
+  header h1{font-size:15px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;}
+  header h1 span{color:var(--flag);}
+  #gps-dot{font-size:11px;color:var(--clay);}
+  #gps-dot.live{color:#6FDD9A;}
+
+  main{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column;}
+  .view{display:none;flex:1;flex-direction:column;overflow:hidden;}
+  .view.active{display:flex;}
+
+  /* ---- PLAY VIEW ---- */
+  #map{flex:1;background:#0a1a14;}
+  .yardage-plate{
+    position:absolute;top:12px;left:50%;transform:translateX(-50%);
+    background:var(--pine-deep);border:2px solid var(--flag);border-radius:14px;
+    padding:6px 22px 8px;text-align:center;z-index:900;
+    box-shadow:0 6px 18px rgba(0,0,0,.45);min-width:150px;
+  }
+  .yardage-plate .yd{font-size:52px;line-height:1;color:#fff;}
+  .yardage-plate .yd small{font-size:16px;color:var(--flag);font-weight:700;margin-left:2px;}
+  .yardage-plate .sub{font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--clay);margin-top:2px;}
+  .map-actions{
+    position:absolute;bottom:12px;left:12px;right:12px;z-index:900;
+    display:flex;gap:8px;
+  }
+  .map-actions button{
+    flex:1;border:none;border-radius:12px;padding:12px 4px;
+    font-size:13px;font-weight:700;color:var(--paper);
+    background:rgba(11,36,28,.92);border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(4px);
+  }
+  .map-actions button.primary{background:var(--flag);color:var(--pine-deep);border-color:var(--flag);}
+  .map-actions button:active{transform:scale(.97);}
+
+  .hole-strip{
+    background:var(--pine);padding:10px 12px calc(10px + env(safe-area-inset-bottom)*0);
+    display:flex;align-items:center;gap:10px;flex-shrink:0;
+    border-top:1px solid rgba(255,255,255,.1);
+  }
+  .hole-strip .hole-btn{
+    width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.25);
+    background:transparent;color:var(--paper);font-size:20px;font-weight:700;
+  }
+  .hole-label{flex:1;text-align:center;}
+  .hole-label .h{font-size:20px;font-weight:800;}
+  .hole-label .p{font-size:11px;color:var(--clay);text-transform:uppercase;letter-spacing:.1em;}
+  .stroke-ctrl{display:flex;align-items:center;gap:8px;}
+  .stroke-ctrl button{
+    width:44px;height:44px;border-radius:50%;border:none;font-size:24px;font-weight:700;
+    background:var(--turf);color:#fff;
+  }
+  .stroke-ctrl .strokes{font-size:30px;min-width:44px;text-align:center;}
+
+  /* ---- SCORECARD VIEW ---- */
+  #scorecard{flex:1;overflow-y:auto;background:var(--paper);color:var(--ink);-webkit-overflow-scrolling:touch;}
+  .card-head{padding:16px 16px 8px;}
+  .card-head input{
+    width:100%;border:none;border-bottom:2px solid var(--pine);background:transparent;
+    font-size:20px;font-weight:800;color:var(--ink);padding:4px 0;outline:none;
+  }
+  .card-head .date{font-size:12px;color:#6b7570;margin-top:4px;}
+  table.card{width:100%;border-collapse:collapse;font-size:14px;}
+  table.card th,table.card td{padding:9px 6px;text-align:center;border-bottom:1px solid #E4E2D8;}
+  table.card th{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6b7570;font-weight:700;}
+  table.card td.hole-n{font-weight:800;background:#F1EFE6;width:44px;}
+  table.card .par-cell{color:#6b7570;}
+  table.card input.par-in{width:38px;text-align:center;border:1px solid #D8D5C8;border-radius:6px;padding:4px 0;font-size:14px;background:#fff;}
+  td.score-cell{font-weight:800;font-size:16px;}
+  .under{color:var(--error);} /* red numbers = under par, classic golf */
+  .over{color:var(--pine);}
+  .totals-row td{font-weight:800;background:#F1EFE6;border-top:2px solid var(--pine);}
+  .save-bar{padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--paper);border-top:1px solid #E4E2D8;display:flex;gap:10px;}
+  .save-bar button{flex:1;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:800;}
+  #save-round{background:var(--pine);color:#fff;}
+  #dl-round{background:var(--flag);color:var(--pine-deep);}
+  #new-round{background:#E9E6DA;color:var(--ink);}
+
+  /* ---- HISTORY VIEW ---- */
+  #history{flex:1;overflow-y:auto;background:var(--paper);color:var(--ink);-webkit-overflow-scrolling:touch;padding:16px;}
+  .round-item{
+    background:#fff;border:1px solid #E4E2D8;border-radius:14px;padding:14px;margin-bottom:12px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .round-item .meta .c{font-weight:800;font-size:16px;}
+  .round-item .meta .d{font-size:12px;color:#6b7570;margin-top:2px;}
+  .round-item .score{text-align:right;}
+  .round-item .score .total{font-size:28px;font-weight:800;}
+  .round-item .score .topar{font-size:12px;font-weight:700;}
+  .round-item button.replay{
+    margin-left:12px;border:none;background:var(--pine);color:#fff;border-radius:10px;
+    padding:10px 12px;font-size:12px;font-weight:700;
+  }
+  .empty-note{text-align:center;color:#6b7570;padding:48px 24px;font-size:14px;line-height:1.6;}
+  .banner{
+    background:#3A2F12;color:var(--flag);font-size:12px;padding:8px 14px;line-height:1.45;
+    display:none;flex-shrink:0;
+  }
+  .banner.show{display:block;}
+
+  /* ---- TABS ---- */
+  nav{
+    display:flex;background:var(--pine-deep);border-top:1px solid rgba(255,255,255,.12);
+    padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;
+  }
+  nav button{
+    flex:1;background:none;border:none;color:var(--clay);padding:11px 0 9px;
+    font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  }
+  nav button.active{color:var(--flag);}
+  nav button .ico{display:block;font-size:19px;margin-bottom:2px;}
+
+  .leaflet-container{font:inherit;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pocket <span>Caddie</span></h1>
+  <div id="gps-dot">● GPS off</div>
+</header>
+
+<div class="banner" id="gps-banner">GPS unavailable in this preview. Once you host this file (e.g. GitHub Pages) and open it in Safari, live yardages will work. Tap the map to test pins meanwhile.</div>
+
+<main>
+  <!-- PLAY -->
+  <section class="view active" id="view-play">
+    <div style="position:relative;flex:1;display:flex;">
+      <div id="map"></div>
+      <div class="yardage-plate">
+        <div class="yd num"><span id="yd-num">—</span><small>yds</small></div>
+        <div class="sub" id="yd-sub">tap map to set target</div>
+      </div>
+      <div class="map-actions">
+        <button id="btn-locate">📍 My position</button>
+        <button id="btn-shot" class="primary">Mark shot</button>
+        <button id="btn-clear">Clear pin</button>
+      </div>
+    </div>
+    <div class="hole-strip">
+      <button class="hole-btn" id="prev-hole">‹</button>
+      <div class="hole-label">
+        <div class="h num">Hole <span id="cur-hole">1</span></div>
+        <div class="p">Par <span id="cur-par">4</span> · <span id="cur-shots">0</span> shots marked</div>
+      </div>
+      <div class="stroke-ctrl">
+        <button id="stroke-minus">−</button>
+        <div class="strokes num" id="cur-strokes">–</div>
+        <button id="stroke-plus">+</button>
+      </div>
+      <button class="hole-btn" id="next-hole">›</button>
+    </div>
+  </section>
+
+  <!-- SCORECARD -->
+  <section class="view" id="view-card">
+    <div id="scorecard">
+      <div class="card-head">
+        <input id="course-name" placeholder="Course name" value="My Course">
+        <div class="date" id="round-date"></div>
+      </div>
+      <table class="card">
+        <thead><tr><th>Hole</th><th>Par</th><th>Score</th><th>+/−</th></tr></thead>
+        <tbody id="card-body"></tbody>
+        <tfoot>
+          <tr class="totals-row">
+            <td>TOT</td><td id="tot-par">72</td><td id="tot-score">–</td><td id="tot-diff">–</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="save-bar">
+      <button id="new-round">New round</button>
+      <button id="dl-round">Download</button>
+      <button id="save-round">Save round</button>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="view" id="view-history">
+    <div id="history"></div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="play" class="active"><span class="ico">⛳️</span>Play</button>
+  <button data-view="card"><span class="ico">✏️</span>Scorecard</button>
+  <button data-view="history"><span class="ico">🗂</span>Rounds</button>
+</nav>
+
+<script>
+/* ============ STATE ============ */
+const defaultPars = [4,4,3,5,4,4,3,4,5, 4,3,4,5,4,4,3,4,5];
+let round = freshRound();
+let curHole = 1;
+let myPos = null;        // {lat,lng}
+let targetPin = null;    // {lat,lng}
+let watching = false;
+
+function freshRound(){
+  return {
+    course:'My Course',
+    date:new Date().toISOString(),
+    pars:[...defaultPars],
+    scores:Array(18).fill(null),
+    shots:Array.from({length:18},()=>[]) // [{lat,lng}]
+  };
+}
+
+/* ============ MAP ============ */
+const map = L.map('map',{zoomControl:false}).setView([39.5,-98.35],4);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+  maxZoom:19, attribution:'Imagery © Esri'
+}).addTo(map);
+
+let meMarker=null, pinMarker=null, line=null, shotLayer=L.layerGroup().addTo(map);
+
+const flagIcon = L.divIcon({html:'<div style="font-size:26px;line-height:1;">⛳️</div>',className:'',iconSize:[26,26],iconAnchor:[6,24]});
+const meIcon = L.divIcon({html:'<div style="width:16px;height:16px;border-radius:50%;background:#2E9BFF;border:3px solid #fff;box-shadow:0 0 8px rgba(0,0,0,.5);"></div>',className:'',iconSize:[16,16],iconAnchor:[8,8]});
+const shotIcon = L.divIcon({html:'<div style="width:11px;height:11px;border-radius:50%;background:#F2C230;border:2px solid #12352A;"></div>',className:'',iconSize:[11,11],iconAnchor:[5,5]});
+
+map.on('click', e=>{
+  targetPin = {lat:e.latlng.lat,lng:e.latlng.lng};
+  if(pinMarker) pinMarker.setLatLng(e.latlng); else pinMarker=L.marker(e.latlng,{icon:flagIcon}).addTo(map);
+  updateYardage();
+});
+
+function yards(a,b){
+  const R=6371000, toR=Math.PI/180;
+  const dLat=(b.lat-a.lat)*toR, dLng=(b.lng-a.lng)*toR;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*toR)*Math.cos(b.lat*toR)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s))*1.09361;
+}
+
+function updateYardage(){
+  const el=document.getElementById('yd-num'), sub=document.getElementById('yd-sub');
+  if(myPos&&targetPin){
+    el.textContent=Math.round(yards(myPos,targetPin));
+    sub.textContent='to your pin';
+    if(line) line.setLatLngs([myPos,targetPin]);
+    else line=L.polyline([myPos,targetPin],{color:'#F2C230',weight:3,dashArray:'6 8'}).addTo(map);
+  }else if(targetPin){
+    el.textContent='—'; sub.textContent='pin set · waiting for GPS';
+  }else{
+    el.textContent='—'; sub.textContent='tap map to set target';
+  }
+}
+
+/* ============ GPS ============ */
+function startGPS(){
+  if(!('geolocation' in navigator)){ gpsFail(); return; }
+  navigator.geolocation.watchPosition(pos=>{
+    myPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    document.getElementById('gps-dot').textContent='● GPS live';
+    document.getElementById('gps-dot').classList.add('live');
+    document.getElementById('gps-banner').classList.remove('show');
+    if(meMarker) meMarker.setLatLng(myPos); else meMarker=L.marker(myPos,{icon:meIcon}).addTo(map);
+    if(!watching){ map.setView(myPos,17); watching=true; }
+    updateYardage();
+  }, err=>{ gpsFail(); }, {enableHighAccuracy:true,maximumAge:2000,timeout:12000});
+}
+function gpsFail(){
+  document.getElementById('gps-banner').classList.add('show');
+  document.getElementById('gps-dot').textContent='● GPS off';
+}
+startGPS();
+
+document.getElementById('btn-locate').onclick=()=>{ if(myPos) map.setView(myPos,17); else startGPS(); };
+document.getElementById('btn-clear').onclick=()=>{
+  targetPin=null; if(pinMarker){map.removeLayer(pinMarker);pinMarker=null;}
+  if(line){map.removeLayer(line);line=null;} updateYardage();
+};
+document.getElementById('btn-shot').onclick=()=>{
+  const p = myPos || targetPin;
+  if(!p){ alert('No position yet — tap the map or wait for GPS.'); return; }
+  round.shots[curHole-1].push({lat:p.lat,lng:p.lng});
+  drawShots(); syncHoleStrip();
+};
+
+function drawShots(){
+  shotLayer.clearLayers();
+  round.shots[curHole-1].forEach((s,i)=>{
+    L.marker(s,{icon:shotIcon}).addTo(shotLayer).bindTooltip('Shot '+(i+1));
+  });
+  const pts=round.shots[curHole-1];
+  if(pts.length>1) L.polyline(pts,{color:'#fff',weight:2,opacity:.7}).addTo(shotLayer);
+}
+
+/* ============ HOLE STRIP ============ */
+function syncHoleStrip(){
+  document.getElementById('cur-hole').textContent=curHole;
+  document.getElementById('cur-par').textContent=round.pars[curHole-1];
+  document.getElementById('cur-strokes').textContent=round.scores[curHole-1]??'–';
+  document.getElementById('cur-shots').textContent=round.shots[curHole-1].length;
+  drawShots();
+}
+document.getElementById('prev-hole').onclick=()=>{curHole=curHole===1?18:curHole-1;syncHoleStrip();};
+document.getElementById('next-hole').onclick=()=>{curHole=curHole===18?1:curHole+1;syncHoleStrip();};
+document.getElementById('stroke-plus').onclick=()=>{round.scores[curHole-1]=(round.scores[curHole-1]||0)+1;syncHoleStrip();renderCard();};
+document.getElementById('stroke-minus').onclick=()=>{
+  const v=round.scores[curHole-1];
+  round.scores[curHole-1]=v>1?v-1:null;
+  syncHoleStrip();renderCard();
+};
+
+/* ============ SCORECARD ============ */
+function renderCard(){
+  const body=document.getElementById('card-body'); body.innerHTML='';
+  let totPar=0,totScore=0,played=0;
+  round.pars.forEach((par,i)=>{
+    totPar+=par;
+    const s=round.scores[i];
+    if(s!=null){totScore+=s;played++;}
+    const diff=s!=null?s-par:null;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="hole-n">${i+1}</td>
+      <td class="par-cell"><input class="par-in" type="number" inputmode="numeric" value="${par}" data-h="${i}"></td>
+      <td class="score-cell">${s??''}</td>
+      <td class="score-cell ${diff==null?'':diff<0?'under':diff>0?'over':''}">${diff==null?'':diff>0?'+'+diff:diff===0?'E':diff}</td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById('tot-par').textContent=totPar;
+  document.getElementById('tot-score').textContent=played?totScore:'–';
+  const playedPar=round.pars.reduce((a,p,i)=>round.scores[i]!=null?a+p:a,0);
+  const d=totScore-playedPar;
+  document.getElementById('tot-diff').textContent=played?(d>0?'+'+d:d===0?'E':d):'–';
+  document.getElementById('round-date').textContent=new Date(round.date).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('course-name').value=round.course;
+  body.querySelectorAll('.par-in').forEach(inp=>{
+    inp.onchange=e=>{
+      const v=parseInt(e.target.value)||4;
+      round.pars[e.target.dataset.h]=Math.min(6,Math.max(3,v));
+      renderCard();syncHoleStrip();
+    };
+  });
+}
+document.getElementById('course-name').oninput=e=>round.course=e.target.value;
+
+/* ============ STORAGE / HISTORY ============ */
+/* Storage adapter: uses Claude artifact storage if present, otherwise the
+   browser's localStorage (permanent on your phone when self-hosted). */
+async function loadRounds(){
+  try{
+    if(window.storage&&window.storage.get){
+      const r=await window.storage.get('caddie-rounds');
+      return r?JSON.parse(r.value):[];
+    }
+    const raw=localStorage.getItem('caddie-rounds');
+    return raw?JSON.parse(raw):[];
+  }catch(e){ return []; }
+}
+async function saveRounds(list){
+  try{
+    if(window.storage&&window.storage.set){
+      await window.storage.set('caddie-rounds',JSON.stringify(list));
+    }else{
+      localStorage.setItem('caddie-rounds',JSON.stringify(list));
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ============ EXPORT / DOWNLOAD ============ */
+function exportRound(r){
+  const suggested=(r.course||'Round')+' '+new Date(r.date).toLocaleDateString();
+  const name=prompt('Name this scorecard:',suggested);
+  if(name===null) return; // cancelled
+  const safe=(name.trim()||suggested).replace(/[\\/:*?"<>|]/g,'-');
+  const played=r.scores.filter(s=>s!=null);
+  const tot=played.reduce((a,b)=>a+b,0);
+  const playedPar=r.pars.reduce((a,p,i)=>r.scores[i]!=null?a+p:a,0);
+  const d=tot-playedPar;
+  const rows=r.pars.map((par,i)=>{
+    const s=r.scores[i];
+    const diff=s!=null?s-par:null;
+    const dTxt=diff==null?'':diff>0?'+'+diff:diff===0?'E':diff;
+    const col=diff==null?'#333':diff<0?'#C0392B':diff>0?'#12352A':'#333';
+    return `<tr><td>${i+1}</td><td>${par}</td><td><b>${s??''}</b></td><td style="color:${col};font-weight:700">${dTxt}</td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${safe}</title>
+<style>
+ body{font-family:-apple-system,Arial,sans-serif;background:#FBFAF6;color:#1B231F;max-width:460px;margin:0 auto;padding:24px 16px;}
+ h1{font-size:22px;border-bottom:3px solid #12352A;padding-bottom:8px;}
+ .sub{color:#6b7570;font-size:13px;margin:6px 0 18px;}
+ table{width:100%;border-collapse:collapse;font-size:15px;}
+ th,td{padding:8px 6px;text-align:center;border-bottom:1px solid #E4E2D8;}
+ th{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6b7570;}
+ tfoot td{font-weight:800;background:#F1EFE6;border-top:2px solid #12352A;}
+</style></head><body>
+<h1>${safe}</h1>
+<div class="sub">${r.course||''} · ${new Date(r.date).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})} · ${played.length} holes</div>
+<table><thead><tr><th>Hole</th><th>Par</th><th>Score</th><th>+/−</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr><td>TOT</td><td>${playedPar}</td><td>${tot||'–'}</td><td>${played.length?(d>0?'+'+d:d===0?'E':d):'–'}</td></tr></tfoot>
+</table></body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=safe+'.html';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);
+}
+document.getElementById('dl-round').onclick=()=>{
+  if(!round.scores.some(s=>s!=null)){ alert('Enter at least one score first.'); return; }
+  exportRound(round);
+};
+
+document.getElementById('save-round').onclick=async ()=>{
+  if(!round.scores.some(s=>s!=null)){ alert('Enter at least one score first.'); return; }
+  const list=await loadRounds();
+  list.unshift(JSON.parse(JSON.stringify(round)));
+  const ok=await saveRounds(list);
+  alert(ok?'Round saved ✔':'Could not save — storage unavailable here.');
+  renderHistory();
+};
+document.getElementById('new-round').onclick=()=>{
+  if(confirm('Start a fresh round? Unsaved scores will be lost.')){
+    round=freshRound();curHole=1;renderCard();syncHoleStrip();
+  }
+};
+
+async function renderHistory(){
+  const list=await loadRounds();
+  const el=document.getElementById('history');
+  if(!list.length){
+    el.innerHTML='<div class="empty-note">No saved rounds yet.<br>Play a round, enter scores, and hit <b>Save round</b> — it\'ll show up here with its map.</div>';
+    return;
+  }
+  el.innerHTML='';
+  list.forEach((r,idx)=>{
+    const played=r.scores.filter(s=>s!=null);
+    const tot=played.reduce((a,b)=>a+b,0);
+    const playedPar=r.pars.reduce((a,p,i)=>r.scores[i]!=null?a+p:a,0);
+    const d=tot-playedPar;
+    const div=document.createElement('div');
+    div.className='round-item';
+    div.innerHTML=`<div class="meta">
+        <div class="c">${r.course||'Round'}</div>
+        <div class="d">${new Date(r.date).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})} · ${played.length} holes</div>
+      </div>
+      <div class="score num">
+        <div class="total">${tot||'–'}</div>
+        <div class="topar ${d<0?'under':'over'}">${played.length?(d>0?'+'+d:d===0?'E':d):''}</div>
+      </div>
+      <button class="replay" data-i="${idx}">Map</button>
+      <button class="replay dl-hist" data-i="${idx}" style="margin-left:6px;background:var(--flag);color:var(--pine-deep);">⬇</button>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.dl-hist').forEach(b=>{
+    b.onclick=async e=>{
+      e.stopPropagation();
+      const list=await loadRounds();
+      exportRound(list[b.dataset.i]);
+    };
+  });
+  el.querySelectorAll('.replay:not(.dl-hist)').forEach(b=>{
+    b.onclick=async ()=>{
+      const list=await loadRounds();
+      const r=list[b.dataset.i];
+      // load its shots into the map for review
+      round=JSON.parse(JSON.stringify(r));
+      curHole=1;
+      const all=r.shots.flat();
+      switchView('play');
+      syncHoleStrip();renderCard();
+      if(all.length){ map.fitBounds(L.latLngBounds(all.map(s=>[s.lat,s.lng])),{padding:[40,40]}); }
+      else alert('No shots were marked in this round — scores loaded onto the card.');
+    };
+  });
+}
+
+/* ============ TABS ============ */
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
+  if(name==='play') setTimeout(()=>map.invalidateSize(),60);
+  if(name==='history') renderHistory();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+
+/* init */
+renderCard();syncHoleStrip();renderHistory();
+</script>
+</body>
+</html>
