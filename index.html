@@ -185,7 +185,7 @@
 </head>
 <body>
 <header>
-  <h1>Pocket <span>Caddie</span></h1>
+  <h1>Pocket <span>Caddie</span> <span style="font-size:9px;color:var(--clay);letter-spacing:0;">v2.6</span></h1>
   <div id="gps-dot">● GPS off</div>
 </header>
 <div class="banner" id="gps-banner">GPS unavailable in this preview. Once hosted and opened in Safari, live yardages work. Tap the map to test pins meanwhile.</div>
@@ -228,7 +228,7 @@
         <div class="mini">
           <div class="ctrl">
             <button id="putt-minus">−</button>
-            <div class="val num" id="cur-putts">–</div>
+            <div class="val num" id="cur-putts" style="border-bottom:2px dotted var(--flag);">–</div>
             <button id="putt-plus">+</button>
           </div>
           <div class="lbl">putts</div>
@@ -289,6 +289,10 @@
 const defaultPars=[4,4,3,5,4,4,3,4,5,4,3,4,5,4,4,3,4,5];
 const DEFAULT_BAG=['Dr','3W','5W','4h','3i','4i','5i','6i','7i','8i','9i','PW','GW','SW','LW','Putter'];
 const MISS_TAGS=['chunked','skulled','thin','fat','push','pull','slice','hook'];
+const PUTT_LEN=[['short','<6ft'],['mid','6–20ft'],['long','20ft+']];
+const PUTT_MISS=[['left','Left'],['right','Right'],['short','Short'],['long','Long'],['lip','Lip-out']];
+const PUTT_READ=[['misread','Misread'],['speed','Bad speed'],['unlucky','Good putt, bad luck']];
+const PUTT_GREEN=[['fast','Fast'],['slow','Slow'],['bumpy','Bumpy']];
 const PENALTIES=[['ob','OB'],['water','Water'],['unplayable','Unplayable']];
 const RELIEFS=[['gur','GUR / maintenance'],['cartpath','Cart path'],['casualwater','Casual water'],['embedded','Embedded ball']];
 
@@ -298,22 +302,24 @@ let round=freshRound();
 let curHole=1, myPos=null, targetPin=null, watching=false, sunMode=false;
 let undoBuffer=null, autosaveTimer=null;
 
+function makeId(){return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12);}
 function newShot(pos,type){
   return {lat:pos.lat,lng:pos.lng,t:Date.now(),type:type||'shot',club:null,tags:[],note:'',penalty:null,player:null};
 }
 function freshRound(mode,players){
   return {
-    version:2, mode:mode||'solo',
+    version:2, id:makeId(), mode:mode||'solo',
     course:'My Course', date:new Date().toISOString(),
     pars:[...defaultPars],
     scores:Array(18).fill(null), putts:Array(18).fill(null),
     fir:Array(18).fill(null), gir:Array(18).fill(null), tee:Array(18).fill(null),
+    putting:Array(18).fill(null),
     shots:Array.from({length:18},()=>[]),
     scramble: mode==='scramble' ? {players:players||['Me','P2']} : null
   };
 }
 function migrate(r){
-  if(r.version>=2){ if(!r.tee)r.tee=Array(18).fill(null); return r; }
+  if(r.version>=2){ if(!r.tee)r.tee=Array(18).fill(null); if(!r.putting)r.putting=Array(18).fill(null); if(!r.id)r.id=makeId(); return r; }
   const m=freshRound();
   m.course=r.course||'My Course'; m.date=r.date||new Date().toISOString();
   m.pars=r.pars||[...defaultPars]; m.scores=r.scores||Array(18).fill(null);
@@ -427,6 +433,12 @@ function drawShots(){
   });
   if(pts.length>1){
     L.polyline(pts.map(p=>[p.lat,p.lng]),{color:'#fff',weight:2,opacity:.7}).addTo(shotLayer);
+    for(let i=1;i<pts.length;i++){
+      const a=pts[i-1],b=pts[i];
+      const mid=[(a.lat+b.lat)/2,(a.lng+b.lng)/2];
+      const yd=Math.round(yards(a,b));
+      L.marker(mid,{icon:L.divIcon({html:'<div class="seg-label" style="display:inline-block;">'+yd+'y</div>',className:'',iconSize:null}),interactive:false}).addTo(shotLayer);
+    }
   }
 }
 
@@ -521,6 +533,7 @@ function openShotSheet(editIndex){
   };
   if(isEdit){
     document.getElementById('sh-del').onclick=()=>{
+      if(!confirm('Delete this point? The GPS position cannot be recovered.'))return;
       const removed=shots.splice(idx,1)[0];
       if(removed.type==='drop'&&round.scores[hole-1])round.scores[hole-1]--;
       if(shots.length&&idx===0)shots[0].type='tee';
@@ -609,6 +622,9 @@ document.getElementById('btn-more').onclick=openMoreSheet;
 document.getElementById('btn-undo').onclick=()=>{
   const shots=round.shots[curHole-1];
   if(!shots.length){toast('Nothing to undo');return;}
+  const last=shots[shots.length-1];
+  const what=last.type==='tee'?'the tee mark':last.type==='drop'?'the drop (+1 stroke removed)':last.type==='relief'?'the relief mark':'shot '+shots.length;
+  if(!confirm('Remove '+what+' on hole '+curHole+'? The GPS point cannot be recovered.'))return;
   const removed=shots.pop();
   if(removed.type==='drop'&&round.scores[curHole-1])round.scores[curHole-1]--;
   drawShots();syncHoleStrip();renderCard();scheduleAutosave();
@@ -658,6 +674,48 @@ document.getElementById('putt-minus').onclick=()=>{
   const v=round.scores[curHole-1];round.scores[curHole-1]=v>1?v-1:null;
   syncHoleStrip();renderCard();scheduleAutosave();
 };
+
+/* putting notes sheet: hole-level chips + per-putt rows */
+function openPuttSheet(){
+  const i=curHole-1;
+  const p=round.putting[i]||{len:null,read:null,green:null,note:'',putts:[]};
+  const n=round.putts[i]||0;
+  let puttRows='';
+  for(let k=0;k<n;k++){
+    const pu=p.putts[k]||{miss:null,note:''};
+    puttRows+='<div class="sheet-sec"><div class="cap">Putt '+(k+1)+'</div>'+
+      chipGridHTML('pp-miss-'+k,PUTT_MISS,pu.miss,false)+
+      '<input type="text" id="pp-note-'+k+'" style="margin-top:7px;" placeholder="note" value="'+(pu.note||'').replace(/"/g,'&quot;')+'"></div>';
+  }
+  openSheet(
+    '<h3>Putting — hole '+curHole+(n?' ('+n+' putts)':'')+'</h3>'+
+    (n?'':'<div class="sheet-sec"><div class="cap">Tip</div><div style="font-size:13px;color:#6b7570;">Set the putt count first to get a row per putt.</div></div>')+
+    '<div class="sheet-sec"><div class="cap">First putt length</div>'+chipGridHTML('pt-len',PUTT_LEN,p.len,false)+'</div>'+
+    puttRows+
+    '<div class="sheet-sec"><div class="cap">Read</div>'+chipGridHTML('pt-read',PUTT_READ,p.read,false)+'</div>'+
+    '<div class="sheet-sec"><div class="cap">Green</div>'+chipGridHTML('pt-green',PUTT_GREEN,p.green,false)+'</div>'+
+    '<div class="sheet-sec"><div class="cap">Hole note</div><input type="text" id="pt-note" placeholder="anything else" value="'+(p.note||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="sheet-btns"><button class="sb-skip" id="pt-cancel">Cancel</button><button class="sb-save" id="pt-save">Save</button></div>'
+  );
+  wireChips('pt-len',false);wireChips('pt-read',false);wireChips('pt-green',false);
+  for(let k=0;k<n;k++)wireChips('pp-miss-'+k,false);
+  document.getElementById('pt-cancel').onclick=closeSheet;
+  document.getElementById('pt-save').onclick=()=>{
+    const putts=[];
+    for(let k=0;k<n;k++){
+      putts.push({miss:chipValues('pp-miss-'+k,false),note:document.getElementById('pp-note-'+k).value.trim()});
+    }
+    round.putting[i]={
+      len:chipValues('pt-len',false),
+      read:chipValues('pt-read',false),
+      green:chipValues('pt-green',false),
+      note:document.getElementById('pt-note').value.trim(),
+      putts:putts
+    };
+    closeSheet();scheduleAutosave();toast('Putting notes saved');
+  };
+}
+document.getElementById('cur-putts').onclick=openPuttSheet;
 
 /* ================= SCORECARD ================= */
 function renderCard(){
@@ -760,7 +818,9 @@ function exportRound(r){
   '<style>body{font-family:-apple-system,Arial,sans-serif;background:#FBFAF6;color:#1B231F;max-width:520px;margin:0 auto;padding:24px 16px;}h1{font-size:22px;border-bottom:3px solid #12352A;padding-bottom:8px;}.sub{color:#6b7570;font-size:13px;margin:6px 0 18px;}table{width:100%;border-collapse:collapse;font-size:14px;}th,td{padding:7px 5px;text-align:center;border-bottom:1px solid #E4E2D8;}th{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6b7570;}tfoot td{font-weight:800;background:#F1EFE6;border-top:2px solid #12352A;}</style></head><body>'+
   '<h1>'+safe+'</h1><div class="sub">'+(r.course||'')+' · '+new Date(r.date).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})+' · '+played.length+' holes'+(r.mode==='scramble'?' · Scramble':'')+'</div>'+
   '<table><thead><tr><th>Hole</th><th>Par</th><th>Score</th><th>Putts</th><th>+/−</th><th>Clubs</th></tr></thead><tbody>'+rows+'</tbody>'+
-  '<tfoot><tr><td>TOT</td><td>'+playedPar+'</td><td>'+(tot||'–')+'</td><td>'+(totPutts||'–')+'</td><td>'+(played.length?(d>0?'+'+d:d===0?'E':d):'–')+'</td><td></td></tr></tfoot></table></body></html>';
+  '<tfoot><tr><td>TOT</td><td>'+playedPar+'</td><td>'+(tot||'–')+'</td><td>'+(totPutts||'–')+'</td><td>'+(played.length?(d>0?'+'+d:d===0?'E':d):'–')+'</td><td></td></tr></tfoot></table>'+
+  '<script type="application/json" id="caddie-round-data">'+JSON.stringify({app:'pocket-caddie',schema:2,round:r}).replace(/</g,'\\u003c')+'<\/script>'+
+  '</body></html>';
   downloadBlob(html,'text/html',safe+'.html');
 }
 document.getElementById('dl-round').onclick=()=>{
