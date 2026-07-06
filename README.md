@@ -12,7 +12,7 @@ Current version: **v1.0** (shown in the app header — use it to check whether a
 
 - **Live GPS yardages** — tap anywhere on the satellite map to drop a flag; the yardage plate shows the live distance from you to it as you walk.
 - **Shot tracking** — mark your position before each swing. First mark per hole is labeled the tee; every segment between points shows its yardage on the map. Tag each shot with a club, miss tags (chunked, skulled, thin, fat, push, pull, slice, hook), and a free-text note — all optional.
-- **Drops & relief** — penalty drops with type (point of entry, or redo/stroke-and-distance e.g. re-teeing after OB), selectable penalty strokes (0/1/2, default 1), and optional reason; the shot that caused the drop is flagged in the data. Free relief (GUR / cart path / casual water / embedded / casual obstacle) marks with no stroke.
+- **Drops & relief** — penalty drops with type (point of entry, drop area/other side, or redo/stroke-and-distance e.g. re-teeing after OB), selectable penalty strokes (0/1/2, default 1), and optional reason; the shot that caused the drop is flagged in the data. Free relief (GUR / cart path / casual water / embedded / casual obstacle) marks with no stroke.
 - **Scorecard** — 18 holes, editable pars, strokes, putts (putts feed the stroke total), Tee / FW / GIR chips, running totals and +/− vs par.
 - **Putting notes** — tap the putts number: first-putt length, per-putt miss direction + note, read, and green condition chips.
 - **Scramble mode** — team format with player names and whose-ball tagging.
@@ -94,6 +94,7 @@ Both export formats carry this schema. The full export is `{app, schema: 3, expo
         "note": "",
         "penalty": null,          // optional reason on drops: "ob" | "water" | "unplayable"
         "dropType": null,         // on type "drop": "entry" (point of entry / lateral / unplayable-nearby)
+                                  //                 | "zone" (designated drop area, or across the obstacle)
                                   //                 | "redo" (stroke & distance, e.g. re-tee after OB)
         "penaltyStrokes": null,   // on type "drop": 0 | 1 | 2 (0 supports casual play; added to the hole score)
         "ledToDrop": true,        // set on the tee/shot whose ball required the following drop

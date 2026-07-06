@@ -296,7 +296,7 @@
       </details>
 
       <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🟥 Drops & free relief</summary>
-        <p>Ball moved? Use <b>Ball moved</b>. For a <b>penalty drop</b>, pick the type — <b>Point of entry</b> (drop near where the ball crossed into trouble or lies unplayable) or <b>Redo</b> (stroke &amp; distance: replay from the previous spot, e.g. re-teeing after OB) — then the penalty strokes (0 / 1 / 2, default 1; 0 is for casual play) and an optional reason. The strokes are added to your score automatically and the shot that caused the drop is flagged in your data. <b>Free relief</b> (GUR/maintenance, cart path, casual water, embedded ball) marks the spot with no stroke.</p>
+        <p>Ball moved? Use <b>Ball moved</b>. For a <b>penalty drop</b>, pick the type — <b>Point of entry</b> (drop near where the ball crossed into trouble or lies unplayable), <b>Drop area / other side</b> (a designated drop zone, or dropping across the obstacle), or <b>Redo</b> (stroke &amp; distance: replay from the previous spot, e.g. re-teeing after OB) — then the penalty strokes (0 / 1 / 2, default 1; 0 is for casual play) and an optional reason. The strokes are added to your score automatically and the shot that caused the drop is flagged in your data. <b>Free relief</b> (GUR/maintenance, cart path, casual water, embedded ball) marks the spot with no stroke.</p>
       </details>
 
       <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🧮 Scoring</summary>
@@ -350,7 +350,7 @@ const PUTT_MISS=[['left','Left'],['right','Right'],['short','Short'],['long','Lo
 const PUTT_READ=[['misread','Misread'],['speed','Bad speed'],['unlucky','Good putt, bad luck']];
 const PUTT_GREEN=[['fast','Fast'],['slow','Slow'],['bumpy','Bumpy']];
 const PENALTIES=[['ob','OB'],['water','Water'],['unplayable','Unplayable']];
-const DROP_TYPES=[['entry','Point of entry'],['redo','Redo (stroke & distance)']];
+const DROP_TYPES=[['entry','Point of entry'],['zone','Drop area / other side'],['redo','Redo (stroke & distance)']];
 const DROP_COUNTS=[['0','0'],['1','1'],['2','2']];
 const RELIEFS=[['gur','GUR / maintenance'],['cartpath','Cart path'],['casualwater','Casual water'],['embedded','Embedded ball'],['obstacle','Casual obstacle']];
 
@@ -493,7 +493,7 @@ function shotLabel(hole,i){
   const s=round.shots[hole-1][i];
   const typeName={
     tee:'Tee',shot:'Shot '+(i+1),
-    drop:'Drop ('+(s.dropType==='redo'?'redo':'entry')+(s.penaltyStrokes?', +'+s.penaltyStrokes:', no penalty')+')',
+    drop:'Drop ('+({entry:'entry',zone:'drop area',redo:'redo'}[s.dropType]||'entry')+(s.penaltyStrokes?', +'+s.penaltyStrokes:', no penalty')+')',
     relief:'Free relief'
   }[s.type]||'Shot';
   let dist='';
@@ -675,7 +675,7 @@ function openMovedSheet(){
     if(n)round.scores[curHole-1]=(round.scores[curHole-1]||0)+n;
     shots.push(s);
     closeSheet();drawShots();syncHoleStrip();renderCard();scheduleAutosave();
-    toast('Drop marked ('+(type==='redo'?'redo':'point of entry')+')'+(n?' · +'+n:' · no penalty'));
+    toast('Drop marked ('+({entry:'point of entry',zone:'drop area',redo:'redo'}[type]||type)+')'+(n?' · +'+n:' · no penalty'));
   };
 }
 
