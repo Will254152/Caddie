@@ -296,7 +296,7 @@
       </details>
 
       <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🟥 Drops & free relief</summary>
-        <p>Ball moved? Use <b>Ball moved</b>: a <b>penalty drop</b> (OB, water, unplayable) marks the spot in red and adds a stroke automatically; <b>free relief</b> (GUR/maintenance, cart path, casual water, embedded ball) marks it in blue with no stroke.</p>
+        <p>Ball moved? Use <b>Ball moved</b>. For a <b>penalty drop</b>, pick the type — <b>Point of entry</b> (drop near where the ball crossed into trouble or lies unplayable) or <b>Redo</b> (stroke &amp; distance: replay from the previous spot, e.g. re-teeing after OB) — then the penalty strokes (0 / 1 / 2, default 1; 0 is for casual play) and an optional reason. The strokes are added to your score automatically and the shot that caused the drop is flagged in your data. <b>Free relief</b> (GUR/maintenance, cart path, casual water, embedded ball) marks the spot with no stroke.</p>
       </details>
 
       <details style="margin-bottom:10px;"><summary style="font-weight:800;padding:8px 0;">🧮 Scoring</summary>
@@ -350,7 +350,9 @@ const PUTT_MISS=[['left','Left'],['right','Right'],['short','Short'],['long','Lo
 const PUTT_READ=[['misread','Misread'],['speed','Bad speed'],['unlucky','Good putt, bad luck']];
 const PUTT_GREEN=[['fast','Fast'],['slow','Slow'],['bumpy','Bumpy']];
 const PENALTIES=[['ob','OB'],['water','Water'],['unplayable','Unplayable']];
-const RELIEFS=[['gur','GUR / maintenance'],['cartpath','Cart path'],['casualwater','Casual water'],['embedded','Embedded ball']];
+const DROP_TYPES=[['entry','Point of entry'],['redo','Redo (stroke & distance)']];
+const DROP_COUNTS=[['0','0'],['1','1'],['2','2']];
+const RELIEFS=[['gur','GUR / maintenance'],['cartpath','Cart path'],['casualwater','Casual water'],['embedded','Embedded ball'],['obstacle','Casual obstacle']];
 
 /* ================= STATE ================= */
 let bag=[...DEFAULT_BAG];
@@ -360,11 +362,11 @@ let undoBuffer=null, autosaveTimer=null;
 
 function makeId(){return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12);}
 function newShot(pos,type){
-  return {lat:pos.lat,lng:pos.lng,t:Date.now(),type:type||'shot',club:null,tags:[],note:'',penalty:null,player:null};
+  return {lat:pos.lat,lng:pos.lng,t:Date.now(),type:type||'shot',club:null,tags:[],note:'',penalty:null,dropType:null,penaltyStrokes:null,player:null};
 }
 function freshRound(mode,players){
   return {
-    version:2, id:makeId(), mode:mode||'solo',
+    version:3, id:makeId(), mode:mode||'solo',
     course:'My Course', date:new Date().toISOString(),
     pars:[...defaultPars],
     scores:Array(18).fill(null), putts:Array(18).fill(null),
@@ -375,14 +377,33 @@ function freshRound(mode,players){
   };
 }
 function migrate(r){
-  if(r.version>=2){ if(!r.tee)r.tee=Array(18).fill(null); if(!r.putting)r.putting=Array(18).fill(null); if(!r.id)r.id=makeId(); return r; }
-  const m=freshRound();
-  m.course=r.course||'My Course'; m.date=r.date||new Date().toISOString();
-  m.pars=r.pars||[...defaultPars]; m.scores=r.scores||Array(18).fill(null);
-  m.shots=(r.shots||Array.from({length:18},()=>[])).map(hole=>
-    hole.map((s,i)=>({lat:s.lat,lng:s.lng,t:s.t||null,type:i===0?'tee':'shot',club:s.club||null,tags:s.tags||[],note:s.note||'',penalty:s.penalty||null,player:s.player||null}))
-  );
-  return m;
+  if(!r.version||r.version<2){
+    const m=freshRound();
+    m.course=r.course||'My Course'; m.date=r.date||new Date().toISOString();
+    m.pars=r.pars||[...defaultPars]; m.scores=r.scores||Array(18).fill(null);
+    m.shots=(r.shots||Array.from({length:18},()=>[])).map(hole=>
+      hole.map((s,i)=>({lat:s.lat,lng:s.lng,t:s.t||null,type:i===0?'tee':'shot',club:s.club||null,tags:s.tags||[],note:s.note||'',penalty:s.penalty||null,dropType:null,penaltyStrokes:null,player:s.player||null}))
+    );
+    r=m;
+  }
+  if(r.version<3){
+    r.shots.forEach(hole=>{
+      hole.forEach((s,i)=>{
+        if(s.type==='drop'){
+          if(s.penaltyStrokes==null)s.penaltyStrokes=1; // old drops always added 1
+          if(!s.dropType)s.dropType='entry';
+          for(let j=i-1;j>=0;j--){
+            if(hole[j].type==='tee'||hole[j].type==='shot'){hole[j].ledToDrop=true;break;}
+          }
+        }
+      });
+    });
+    r.version=3;
+  }
+  if(!r.tee)r.tee=Array(18).fill(null);
+  if(!r.putting)r.putting=Array(18).fill(null);
+  if(!r.id)r.id=makeId();
+  return r;
 }
 
 /* ================= STORAGE ================= */
@@ -470,7 +491,11 @@ function updateYardage(){
 
 function shotLabel(hole,i){
   const s=round.shots[hole-1][i];
-  const typeName={tee:'Tee',shot:'Shot '+(i+1),drop:'Drop (+1)',relief:'Free relief'}[s.type]||'Shot';
+  const typeName={
+    tee:'Tee',shot:'Shot '+(i+1),
+    drop:'Drop ('+(s.dropType==='redo'?'redo':'entry')+(s.penaltyStrokes?', +'+s.penaltyStrokes:', no penalty')+')',
+    relief:'Free relief'
+  }[s.type]||'Shot';
   let dist='';
   if(i>0){
     dist=' · '+Math.round(yards(round.shots[hole-1][i-1],s))+'y from last';
@@ -591,7 +616,16 @@ function openShotSheet(editIndex){
     document.getElementById('sh-del').onclick=()=>{
       if(!confirm('Delete this point? The GPS position cannot be recovered.'))return;
       const removed=shots.splice(idx,1)[0];
-      if(removed.type==='drop'&&round.scores[hole-1])round.scores[hole-1]--;
+      if(removed.type==='drop'){
+        const n=removed.penaltyStrokes!=null?removed.penaltyStrokes:1;
+        if(n&&round.scores[hole-1]!=null){
+          const v=round.scores[hole-1]-n;
+          round.scores[hole-1]=v>0?v:null;
+        }
+        for(let j=idx-1;j>=0;j--){
+          if(shots[j].type==='tee'||shots[j].type==='shot'){delete shots[j].ledToDrop;break;}
+        }
+      }
       if(shots.length&&idx===0)shots[0].type='tee';
       closeSheet();drawShots();syncHoleStrip();renderCard();scheduleAutosave();
       toast('Deleted');
@@ -605,23 +639,43 @@ function openMovedSheet(){
   if(!p){alert('No position yet — wait for GPS or tap the map.');return;}
   openSheet(
     '<h3>Ball moved</h3>'+
-    '<div class="sheet-sec"><div class="cap">Penalty drop (+1 stroke)</div>'+chipGridHTML('mv-pen',PENALTIES,null,false,true)+'</div>'+
+    '<div class="sheet-sec"><div class="cap">Penalty drop — type</div>'+chipGridHTML('mv-type',DROP_TYPES,null,false,true)+'</div>'+
+    '<div class="sheet-sec"><div class="cap">Penalty strokes</div>'+chipGridHTML('mv-count',DROP_COUNTS,'1',false,true)+'</div>'+
+    '<div class="sheet-sec"><div class="cap">Reason (optional)</div>'+chipGridHTML('mv-pen',PENALTIES,null,false,true)+'</div>'+
     '<div class="sheet-sec"><div class="cap">Free relief (no stroke)</div>'+chipGridHTML('mv-rel',RELIEFS,null,false)+'</div>'+
     '<div class="sheet-btns"><button class="sb-skip" id="mv-cancel">Cancel</button><button class="sb-save" id="mv-save">Mark position</button></div>'
   );
-  wireChips('mv-pen',false,true,()=>{document.querySelectorAll('#mv-rel button').forEach(x=>x.classList.remove('sel'));});
-  wireChips('mv-rel',false,false,()=>{document.querySelectorAll('#mv-pen button').forEach(x=>x.classList.remove('sel','warn'));});
+  const clearRelief=()=>document.querySelectorAll('#mv-rel button').forEach(x=>x.classList.remove('sel'));
+  const clearDrop=()=>document.querySelectorAll('#mv-type button,#mv-pen button').forEach(x=>x.classList.remove('sel','warn'));
+  wireChips('mv-type',false,true,clearRelief);
+  wireChips('mv-count',false,true,clearRelief);
+  wireChips('mv-pen',false,true,clearRelief);
+  wireChips('mv-rel',false,false,clearDrop);
   document.getElementById('mv-cancel').onclick=closeSheet;
   document.getElementById('mv-save').onclick=()=>{
-    const pen=chipValues('mv-pen',false),rel=chipValues('mv-rel',false);
-    if(!pen&&!rel){alert('Pick a drop or relief type.');return;}
+    const type=chipValues('mv-type',false),cntRaw=chipValues('mv-count',false),
+          pen=chipValues('mv-pen',false),rel=chipValues('mv-rel',false);
     const pos=myPos||targetPin;
-    const s=newShot(pos,pen?'drop':'relief');
-    if(pen){s.penalty=pen;round.scores[curHole-1]=(round.scores[curHole-1]||0)+1;}
-    else{s.note=RELIEFS.find(r=>r[0]===rel)[1];}
-    round.shots[curHole-1].push(s);
+    if(rel){
+      const s=newShot(pos,'relief');
+      s.note=RELIEFS.find(r=>r[0]===rel)[1];
+      round.shots[curHole-1].push(s);
+      closeSheet();drawShots();syncHoleStrip();renderCard();scheduleAutosave();
+      toast('Relief marked · no stroke');
+      return;
+    }
+    if(!type){alert('Pick a drop type (or free relief).');return;}
+    const n=parseInt(cntRaw!=null?cntRaw:'1');
+    const shots=round.shots[curHole-1];
+    for(let j=shots.length-1;j>=0;j--){
+      if(shots[j].type==='tee'||shots[j].type==='shot'){shots[j].ledToDrop=true;break;}
+    }
+    const s=newShot(pos,'drop');
+    s.dropType=type;s.penaltyStrokes=n;s.penalty=pen;
+    if(n)round.scores[curHole-1]=(round.scores[curHole-1]||0)+n;
+    shots.push(s);
     closeSheet();drawShots();syncHoleStrip();renderCard();scheduleAutosave();
-    toast(pen?'Drop marked · +1 stroke':'Relief marked · no stroke');
+    toast('Drop marked ('+(type==='redo'?'redo':'point of entry')+')'+(n?' · +'+n:' · no penalty'));
   };
 }
 
@@ -679,10 +733,19 @@ document.getElementById('btn-undo').onclick=()=>{
   const shots=round.shots[curHole-1];
   if(!shots.length){toast('Nothing to undo');return;}
   const last=shots[shots.length-1];
-  const what=last.type==='tee'?'the tee mark':last.type==='drop'?'the drop (+1 stroke removed)':last.type==='relief'?'the relief mark':'shot '+shots.length;
+  const what=last.type==='tee'?'the tee mark':last.type==='drop'?'the drop ('+(last.penaltyStrokes?'+'+last.penaltyStrokes+' stroke'+(last.penaltyStrokes>1?'s':'')+' removed':'no penalty')+')':last.type==='relief'?'the relief mark':'shot '+shots.length;
   if(!confirm('Remove '+what+' on hole '+curHole+'? The GPS point cannot be recovered.'))return;
   const removed=shots.pop();
-  if(removed.type==='drop'&&round.scores[curHole-1])round.scores[curHole-1]--;
+  if(removed.type==='drop'){
+    const n=removed.penaltyStrokes!=null?removed.penaltyStrokes:1;
+    if(n&&round.scores[curHole-1]!=null){
+      const v=round.scores[curHole-1]-n;
+      round.scores[curHole-1]=v>0?v:null;
+    }
+    for(let j=shots.length-1;j>=0;j--){
+      if(shots[j].type==='tee'||shots[j].type==='shot'){delete shots[j].ledToDrop;break;}
+    }
+  }
   drawShots();syncHoleStrip();renderCard();scheduleAutosave();
   toast('Removed '+(removed.type==='tee'?'tee mark':removed.type));
 };
@@ -875,7 +938,7 @@ function exportRound(r){
   '<h1>'+safe+'</h1><div class="sub">'+(r.course||'')+' · '+new Date(r.date).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})+' · '+played.length+' holes'+(r.mode==='scramble'?' · Scramble':'')+'</div>'+
   '<table><thead><tr><th>Hole</th><th>Par</th><th>Score</th><th>Putts</th><th>+/−</th><th>Clubs</th></tr></thead><tbody>'+rows+'</tbody>'+
   '<tfoot><tr><td>TOT</td><td>'+playedPar+'</td><td>'+(tot||'–')+'</td><td>'+(totPutts||'–')+'</td><td>'+(played.length?(d>0?'+'+d:d===0?'E':d):'–')+'</td><td></td></tr></tfoot></table>'+
-  '<script type="application/json" id="caddie-round-data">'+JSON.stringify({app:'pocket-caddie',schema:2,round:r}).replace(/</g,'\\u003c')+'<\/script>'+
+  '<script type="application/json" id="caddie-round-data">'+JSON.stringify({app:'pocket-caddie',schema:3,round:r}).replace(/</g,'\\u003c')+'<\/script>'+
   '</body></html>';
   downloadBlob(html,'text/html',safe+'.html');
 }
@@ -889,7 +952,7 @@ document.getElementById('export-all').onclick=async()=>{
   const name=prompt('Name this data export:','caddie-data-'+new Date().toISOString().slice(0,10));
   if(name===null)return;
   const safe=(name.trim()||'caddie-data').replace(/[\\/:*?"<>|]/g,'-');
-  downloadBlob(JSON.stringify({exported:new Date().toISOString(),app:'pocket-caddie',schema:2,rounds:list},null,1),'application/json',safe+'.json');
+  downloadBlob(JSON.stringify({exported:new Date().toISOString(),app:'pocket-caddie',schema:3,rounds:list},null,1),'application/json',safe+'.json');
   toast('Exported '+list.length+' rounds');
 };
 

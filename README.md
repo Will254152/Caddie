@@ -12,7 +12,7 @@ Current version: **v1.0** (shown in the app header — use it to check whether a
 
 - **Live GPS yardages** — tap anywhere on the satellite map to drop a flag; the yardage plate shows the live distance from you to it as you walk.
 - **Shot tracking** — mark your position before each swing. First mark per hole is labeled the tee; every segment between points shows its yardage on the map. Tag each shot with a club, miss tags (chunked, skulled, thin, fat, push, pull, slice, hook), and a free-text note — all optional.
-- **Drops & relief** — penalty drops (OB / water / unplayable) auto-add a stroke and mark in red; free relief (GUR / cart path / casual water / embedded) marks in blue with no stroke.
+- **Drops & relief** — penalty drops with type (point of entry, or redo/stroke-and-distance e.g. re-teeing after OB), selectable penalty strokes (0/1/2, default 1), and optional reason; the shot that caused the drop is flagged in the data. Free relief (GUR / cart path / casual water / embedded / casual obstacle) marks with no stroke.
 - **Scorecard** — 18 holes, editable pars, strokes, putts (putts feed the stroke total), Tee / FW / GIR chips, running totals and +/− vs par.
 - **Putting notes** — tap the putts number: first-putt length, per-putt miss direction + note, read, and green condition chips.
 - **Scramble mode** — team format with player names and whose-ball tagging.
@@ -56,13 +56,13 @@ All persistence is browser `localStorage` on the device (with a transparent fall
 | `caddie-bag` | JSON array of the user's club list |
 | `caddie-seen` | Flag that the welcome tour was shown |
 
-### Round schema (version 2)
+### Round schema (version 3)
 
-Both export formats carry this schema. The full export is `{app, schema: 2, exported, rounds: [...]}`; each downloaded scorecard embeds `{app, schema: 2, round}` in a `<script type="application/json" id="caddie-round-data">` block inside the HTML.
+Both export formats carry this schema. The full export is `{app, schema: 3, exported, rounds: [...]}`; each downloaded scorecard embeds `{app, schema: 3, round}` in a `<script type="application/json" id="caddie-round-data">` block inside the HTML.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "id": "mcp3k9x-f83ka1z7q",     // unique per round (timestamp + random); use for dedup
   "mode": "solo",                 // "solo" | "scramble"
   "course": "My Course",
@@ -92,7 +92,11 @@ Both export formats carry this schema. The full export is `{app, schema: 2, expo
         "club": "Dr",             // from the user's bag; null if untagged
         "tags": ["push"],         // miss tags
         "note": "",
-        "penalty": null,          // "ob" | "water" | "unplayable" on type "drop"
+        "penalty": null,          // optional reason on drops: "ob" | "water" | "unplayable"
+        "dropType": null,         // on type "drop": "entry" (point of entry / lateral / unplayable-nearby)
+                                  //                 | "redo" (stroke & distance, e.g. re-tee after OB)
+        "penaltyStrokes": null,   // on type "drop": 0 | 1 | 2 (0 supports casual play; added to the hole score)
+        "ledToDrop": true,        // set on the tee/shot whose ball required the following drop
         "player": null            // scramble: whose ball
       }
     ]
@@ -100,11 +104,11 @@ Both export formats carry this schema. The full export is `{app, schema: 2, expo
 }
 ```
 
-Analysis notes: shot distance = haversine distance between consecutive points in a hole's `shots` array (the app displays yards, `meters × 1.09361`). A `drop` contributes +1 stroke, `relief` contributes none. `id` makes deduplication across export files exact. Fields are nullable throughout — untagged data is null, never fabricated.
+Analysis notes: shot distance = haversine distance between consecutive points in a hole's `shots` array (the app displays yards, `meters × 1.09361`). **Drop semantics matter for distance stats:** a shot flagged `ledToDrop: true` has no measurable distance — its ball was lost, OB, or unplayable — so exclude it from club distance averages but include it in attempt/accuracy counts (a drive that goes OB is still a driver swing). Any segment *ending* at a `type: "drop"` point is ball transport, not a shot. A `dropType: "redo"` means the next swing replays from (approximately) the previous spot; `"entry"` means play continues from where the ball entered trouble. `penaltyStrokes` (0–2) is the drop's score cost; `relief` points never cost strokes. `id` makes deduplication across export files exact. Fields are nullable throughout — untagged data is null, never fabricated.
 
 ### Versioning & migration
 
-Every round carries `version`; exports carry top-level `schema`. On load, `migrate()` upgrades older records in place (v1 → v2 wraps bare `{lat,lng}` shots into full shot records and backfills missing arrays/`id`). Any future schema change should bump the version, extend `migrate()`, and never destroy fields — so old exports remain analyzable forever.
+Every round carries `version`; exports carry top-level `schema`. On load, `migrate()` upgrades older records sequentially (v1 → v2 wraps bare `{lat,lng}` shots into full shot records; v2 → v3 backfills `penaltyStrokes: 1` and `dropType: "entry"` on old drops and flags the preceding shot with `ledToDrop`). Any future schema change should bump the version, extend `migrate()`, and never destroy fields — so old exports remain analyzable forever.
 
 ## Code architecture
 
